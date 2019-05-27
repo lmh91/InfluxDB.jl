@@ -5,21 +5,23 @@ export InfluxServer, create_db, query
 import Base: write
 
 using JSON
-using Requests
+using HTTP
 using DataFrames
 using Compat
 
+using HTTP.URIs
+
 # A server that we will be communicating with
-type InfluxServer
+struct InfluxServer
     # HTTP API endpoints
     addr::URI
 
     # Optional authentication stuffage
-    username::Nullable{AbstractString}
-    password::Nullable{AbstractString}
+    username::Union{AbstractString, Nothing}
+    password::Union{AbstractString, Nothing}
 
     # Build a server object that we can use in queries from now on
-    function InfluxServer(address::AbstractString; username=Nullable{AbstractString}(), password=Nullable{AbstractString}())
+    function InfluxServer(address::AbstractString; username=Union{AbstractString, Nothing}(), password=Union{AbstractString, Nothing}())
         # If there wasn't a schema defined (we only recognize http/https), default to http
         if !ismatch(r"^https?://", address)
             uri = URI("http://$address")
@@ -32,11 +34,11 @@ type InfluxServer
             uri =  URI(uri.scheme, uri.host, 8086, uri.path)
         end
 
-        if !isa(username, Nullable)
-            username = Nullable(username)
+        if !isa(username, Nothing)
+            username = nothing
         end
-        if !isa(password, Nullable)
-            password = Nulllable(password)
+        if !isa(password, Nothing)
+            password = nothing
         end
 
         # URIs are the new hotness
@@ -46,7 +48,7 @@ end
 
 # Add authentication to a query dict, if we need to
 function authenticate!(server::InfluxServer, query::Dict)
-    if !isnull(server.username) && !isnull(server.password)
+    if !isnothing(server.username) && !isnothing(server.password)
         query["u"] = server.username.value
         query["p"] = server.password.value
     end
