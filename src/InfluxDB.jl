@@ -21,9 +21,9 @@ struct InfluxServer
     password::Union{AbstractString, Nothing}
 
     # Build a server object that we can use in queries from now on
-    function InfluxServer(address::AbstractString; username=Union{AbstractString, Nothing}(), password=Union{AbstractString, Nothing}())
+    function InfluxServer(address::AbstractString; username::Union{AbstractString, Nothing} = nothing, password::Union{AbstractString, Nothing} = nothing)
         # If there wasn't a schema defined (we only recognize http/https), default to http
-        if !ismatch(r"^https?://", address)
+        if !occursin(r"^https?://", address)
             uri = URI("http://$address")
         else
             uri = URI(address)
@@ -34,13 +34,6 @@ struct InfluxServer
             uri =  URI(uri.scheme, uri.host, 8086, uri.path)
         end
 
-        if !isa(username, Nothing)
-            username = nothing
-        end
-        if !isa(password, Nothing)
-            password = nothing
-        end
-
         # URIs are the new hotness
         return new(uri, username, password)
     end
@@ -49,8 +42,8 @@ end
 # Add authentication to a query dict, if we need to
 function authenticate!(server::InfluxServer, query::Dict)
     if !isnothing(server.username) && !isnothing(server.password)
-        query["u"] = server.username.value
-        query["p"] = server.password.value
+        query["u"] = server.username
+        query["p"] = server.password
     end
 end
 
@@ -61,7 +54,8 @@ function query_series( server::InfluxServer, db::AbstractString, name::AbstractS
     query = Dict("db"=>db, "q"=>"SELECT * from $name")
 
     authenticate!(server, query)
-    response = get("$(server.addr)query"; query=query)
+    # response = get("$(server.addr)query"; query=query)
+    response = HTTP.get(joinpath(server.addr.uri, "query"), query=query)
     if response.status != 200
         error(bytestring(response.data))
     end
@@ -75,12 +69,24 @@ function query_series( server::InfluxServer, db::AbstractString, name::AbstractS
     return df
 end
 
+# Show a databases
+function show_databases(server::InfluxServer)
+    query::Dict{String, String} = Dict("q"=>"SHOW DATABASES")
+
+    authenticate!(server, query)
+    # response = get("$(server.addr)query"; query=query)
+    response = HTTP.get(joinpath(server.addr.uri, "query"), query=query)
+    if response.status != 200
+        error(bytestring(response.data))
+    end
+    response
+end
 # Create a database!
 function create_db(server::InfluxServer, db::AbstractString)
     query = Dict("q"=>"CREATE DATABASE \"$db\"")
 
     authenticate!(server, query)
-    response = get("$(server.addr)query"; query=query)
+    response = HTTP.get(joinpath(server.addr.uri, "query"), query=query)
     if response.status != 200
         error(bytestring(response.data))
     end
@@ -109,7 +115,7 @@ function write( server::InfluxServer, db::AbstractString, name::AbstractString, 
 
     # Authenticate ourselves, if we need to
     authenticate!(server, query)
-    response = post("$(server.addr)write"; query=query, data=datastr)
+    response = HTTP.post(joinpath(server.addr.uri, "write"), query=query, data=datastr)
     if response.status != 204
         error(bytestring(response.data))
     end
