@@ -48,26 +48,6 @@ function authenticate!(server::InfluxServer, query::Dict)
 end
 
 
-# Grab a timeseries
-function query_series( server::InfluxServer, db::AbstractString, name::AbstractString;
-                       chunk_size::Integer=10000)
-    query = Dict("db"=>db, "q"=>"SELECT * from $name")
-
-    authenticate!(server, query)
-    # response = get("$(server.addr)query"; query=query)
-    response = HTTP.get(joinpath(server.addr.uri, "query"), query=query)
-    if response.status != 200
-        error(bytestring(response.data))
-    end
-
-    # Grab result, turn it into a dataframe
-    series_dict = JSON.parse(bytestring(response.data))["results"][1]["series"][1]
-    df = DataFrame()
-    for name_idx in 1:length(series_dict["columns"])
-       df[symbol(series_dict["columns"][name_idx])] = [x[name_idx] for x in series_dict["values"]]
-    end
-    return df
-end
 
 # Show a databases
 function get_database_names(server::InfluxServer)::Vector{String}
@@ -89,7 +69,8 @@ function create_db(server::InfluxServer, db::AbstractString)
     authenticate!(server, query)
     response = HTTP.get(joinpath(server.addr.uri, "query"), query=query)
     if response.status != 200
-        error(bytestring(response.data))
+        error("Response status = ", response.status)
+        # error(bytestring(response.data))
     end
 end
 
@@ -106,20 +87,42 @@ function write( server::InfluxServer, db::AbstractString, name::AbstractString, 
     tagstring = join([",$key=$val" for (key, val) in tags])
 
     # Next, our values
-    valuestring = join(["$key=$val" for (key, val) in values], ",")
+    valuestring = join(["$key=$val" for (key, val) in values])
 
     # Finally, convert timestamp to seconds
     timestring = "$(round(Int64,timestamp))"
 
     # Put them all together to get a data string
     datastr = "$(name)$(tagstring) $(valuestring) $(timestring)"
-
     # Authenticate ourselves, if we need to
     authenticate!(server, query)
-    response = HTTP.post(joinpath(server.addr.uri, "write"), query=query, data=datastr)
+    response = HTTP.post(joinpath(server.addr.uri, "write"), query=query, body=datastr)
     if response.status != 204
-        error(bytestring(response.data))
+        error("Response status = ", response.status)
+        # error(bytestring(response.data))
     end
 end
+
+# Grab a timeseries
+function query_series( server::InfluxServer, db::AbstractString, name::AbstractString;
+                       chunk_size::Integer=10000)
+    query = Dict("db"=>db, "q"=>"SELECT * from $name")
+    
+    authenticate!(server, query)
+    # response = get("$(server.addr)query"; query=query)
+    response = HTTP.get(joinpath(server.addr.uri, "query"), query=query)
+    if response.status != 200
+        error("Response status = ", response.status)
+        # error(bytestring(response.data))
+    end
+
+    series_dict = JSON.parse(String(response.body))["results"][1]["series"][1]
+    df = DataFrame()
+    for name_idx in 1:length(series_dict["columns"])
+       df[Symbol(series_dict["columns"][name_idx])] = [x[name_idx] for x in series_dict["values"]]
+    end
+    return df
+end
+
 
 end # module
