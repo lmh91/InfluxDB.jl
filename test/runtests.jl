@@ -1,7 +1,18 @@
 using InfluxDB
-using Base.Test
+using Test
+
+# using HTTP
+# using JSON
 
 # write your own tests here
 #@test 1 == 1
-server = InfluxDB.InfluxServer("http://localhost:8086")
-InfluxDB.create_db(server, "stats")
+
+
+addr = "http://localhost:8086"
+server = InfluxDB.InfluxServer(addr)
+db_names = InfluxDB.get_database_names(server)
+@show db_names
+
+InfluxDB.create_db(server, "testDB1")
+db_names = InfluxDB.get_database_names(server)
+@show db_names
