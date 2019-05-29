@@ -70,16 +70,17 @@ function query_series( server::InfluxServer, db::AbstractString, name::AbstractS
 end
 
 # Show a databases
-function show_databases(server::InfluxServer)
+function get_database_names(server::InfluxServer)::Vector{String}
     query::Dict{String, String} = Dict("q"=>"SHOW DATABASES")
-
     authenticate!(server, query)
-    # response = get("$(server.addr)query"; query=query)
     response = HTTP.get(joinpath(server.addr.uri, "query"), query=query)
     if response.status != 200
-        error(bytestring(response.data))
+        # error(bytestring(response.data))
+        error("Response status = ", response.status)
     end
-    response
+    response_dict::Dict = JSON.parse(String(response.body))
+    n_databases::Int = length(response_dict["results"][1]["series"][1]["values"])
+    String[ response_dict["results"][1]["series"][1]["values"][i][1] for i in 1:n_databases]
 end
 # Create a database!
 function create_db(server::InfluxServer, db::AbstractString)
