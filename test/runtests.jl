@@ -18,3 +18,6 @@ db_names = InfluxDB.get_database_names(server)
 @show db_names
 
 InfluxDB.write(server, "testDB1", "t1", Dict("temp"=>0.34) )
+
+InfluxDB.query_series(server, "testDB1", "t1")
+
